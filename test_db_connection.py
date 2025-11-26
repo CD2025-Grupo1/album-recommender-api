@@ -1,7 +1,7 @@
 from src.database import get_data_as_dataframe
 
 # Probemos traer los primeros 5 items
-sql = "SELECT * FROM Items LIMIT 5;"
+sql = "SELECT * FROM Compras LIMIT 5;"
 df = get_data_as_dataframe(sql)
 
 print()
