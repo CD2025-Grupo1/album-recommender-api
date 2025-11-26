@@ -2,21 +2,25 @@ import uvicorn
 from fastapi import FastAPI
 from src.routes import router
 
-# Metadatos para la documentación automática (Swagger)
+# Definimos los metadatos de los tags para que se vean bonitos
+tags_metadata = [
+    {
+        "name": "Operaciones",
+    }
+]
+
 description = """
-API del Sistema Recomendador de Álbumes (TPI de Ciencia de Datos 2025 - Grupo 1).
-Permite gestionar usuarios, registrar compras y obtener recomendaciones.
+API REST desarrollada por el grupo 1 para el Trabajo Práctico Integrador de Ciencia de Datos 2025.
 """
 
 app = FastAPI(
     title="Sistema Recomendador de Álbumes",
     description=description,
-    version="1.0.0"
+    version="1.0.0",
+    openapi_tags=tags_metadata,
 )
 
-# Incluir las rutas definidas en routes.py
 app.include_router(router)
 
 if __name__ == "__main__":
-    # Corre el servidor en localhost:8000
     uvicorn.run("src.app:app", host="127.0.0.1", port=8000, reload=True)

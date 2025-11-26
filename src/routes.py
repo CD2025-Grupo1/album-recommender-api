@@ -3,34 +3,52 @@ from pydantic import BaseModel
 from typing import List
 from src.services.recommender import RecommenderService
 
-router = APIRouter(tags=["Sistema Recomendador de Álbumes"])
+# Nombre corto y funcional para el grupo de endpoints
+router = APIRouter(tags=["Operaciones"])
 
 service = RecommenderService()
 
-# --- Modelos de Entrada (Validación de JSON) ---
+# Modelos de Entrada con ejemplos 
 class UserCreate(BaseModel):
-    generos_id: List[int] 
+    generos_id: List[int]
+
+    # Esto hace que en Swagger aparezca data de ejemplo lista para usar
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "generos_id": [1, 12, 5]  # Rock, Hard Rock, Punk
+                }
+            ]
+        }
+    }
 
 class TransactionCreate(BaseModel):
     item_id: int
 
-# --- Endpoints ---
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "item_id": 31  # Ejemplo "Thriller"
+                }
+            ]
+        }
+    }
 
-@router.get("/", summary="Verificar Estado del Sistema")
+# Endpoints
+
+@router.get("/", summary="Verificar estado del sistema")
 def health_check():
     """
-    Endpoint de monitoreo para asegurar que la API está activa.
+    Devuelve estado 200 si la API está viva.
     """
     return {"status": "ok", "message": "API de Recomendaciones - ACTIVA"}
 
-@router.post("/users", status_code=201, summary="Crear Nuevo Usuario")
+@router.post("/users", status_code=201, summary="Crear nuevo usuario")
 def create_new_user(user: UserCreate):
     """
-    **Crea un nuevo usuario** en la base de datos.
-    
-    - Recibe una lista de IDs de géneros.
-    - Registra sus preferencias iniciales para solucionar el *Cold Start*.
-    - Retorna el ID del usuario generado.
+    Registra un usuario y sus gustos iniciales para poder recomendarle música inmediatamente.
     """
     try:
         new_id = service.create_user(user.generos_id)
@@ -38,25 +56,18 @@ def create_new_user(user: UserCreate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/recommend/{user_id}", summary="Obtener Recomendaciones")
+@router.get("/recommend/{user_id}", summary="Obtener recomendaciones")
 def get_recommendations(user_id: int):
     """
-    Genera una lista de **5 álbumes recomendados** para el usuario.
-    
-    - Si el usuario es nuevo, usa filtrado basado en contenido.
-    - Si tiene historial, usa filtrado colaborativo.
+    Entrega el Top 5 de álbumes sugeridos para el usuario dado.
     """
     items = service.get_recommendations(user_id)
     return {"user_id": user_id, "recommendations": items}
 
-@router.post("/users/{user_id}/transaction", summary="Registrar Compra")
+@router.post("/users/{user_id}/transaction", summary="Registrar compra")
 def register_purchase(user_id: int, transaction: TransactionCreate):
     """
-    Registra una transacción de compra.
-    
-    - **user_id**: ID del usuario que compra.
-    - **item_id**: ID del álbum comprado.
-    - Esto alimenta la base de datos de conocimiento para futuras recomendaciones.
+    Guarda la interacción 'usuario compra ítem'.
     """
     success = service.add_transaction(user_id, transaction.item_id)
     if success:
