@@ -3,7 +3,7 @@ from src.database import get_data_as_dataframe, execute_non_query
 
 class RecommenderService:
     def __init__(self):
-        # Aquí cargaríamos los modelos entrenados en el futuro
+        # Acá van a ir los modelos que usemos
         pass
 
     def get_recommendations(self, user_id: int, top_k: int = 5):
@@ -12,36 +12,28 @@ class RecommenderService:
         Devuelve simplemente los primeros 5 ítems de la base de datos
         para probar que la conexión funciona.
         """
-        # Query simple para probar la conexión
-        query = "SELECT item_id, titulo, artista FROM Items LIMIT :k"
+        query = "SELECT item_id, titulo, artista FROM Items LIMIT :k" # Query simple para probar la conexión
         
-        # Usamos nuestro conector seguro
+        # Usamos nuestro conector
         df = get_data_as_dataframe(query, params={"k": top_k})
         
         if df is not None and not df.empty:
-            # Convertimos el DataFrame a una lista de diccionarios (JSON friendly)
-            return df.to_dict(orient="records")
+            return df.to_dict(orient="records") # Convertimos el df a una lista de diccionarios 
         else:
             return []
 
     def create_user(self, generos_preferidos: list[int]):
         """
-        Inserta un usuario real en la BD.
-        Retorna el ID del usuario creado.
+        Inserta un usuario real en la BD. Devuelve el ID del usuario creado.
         """
-        # 1. Crear Usuario
+        
         sql_user = "INSERT INTO Usuarios (fecha_creacion) VALUES (NOW()) RETURNING user_id;"
-        # Nota: execute_non_query devuelve rowcount, pero para obtener ID necesitamos algo más específico.
-        # Por simplicidad en este prototipo, insertamos y asumimos el último ID o usamos una query directa.
-        # Para hacerlo robusto con nuestro conector actual, insertamos y buscamos el max ID.
         
         execute_non_query("INSERT INTO Usuarios (fecha_creacion) VALUES (NOW())")
-        
-        # Recuperamos el ID generado (en un entorno real usaríamos RETURNING con fetchone)
-        df = get_data_as_dataframe("SELECT MAX(user_id) as id FROM Usuarios")
+        df = get_data_as_dataframe("SELECT MAX(user_id) as id FROM Usuarios") # toma el último ID, simplificación
         new_user_id = int(df.iloc[0]["id"])
 
-        # 2. Insertar Preferencias (Cold Start)
+        # Insertar Preferencias Explícitas
         for genero_id in generos_preferidos:
             sql_pref = "INSERT INTO PreferenciasUsuario (user_id, genero_id) VALUES (:uid, :gid)"
             execute_non_query(sql_pref, params={"uid": new_user_id, "gid": genero_id})
