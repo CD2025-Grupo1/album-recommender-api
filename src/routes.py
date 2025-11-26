@@ -1,42 +1,12 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query
 from typing import List
 from src.services.recommender import RecommenderService
 
-# Nombre corto y funcional para el grupo de endpoints
 router = APIRouter(tags=["Operaciones"])
 
 service = RecommenderService()
 
-# Modelos de Entrada con ejemplos 
-class UserCreate(BaseModel):
-    generos_id: List[int]
-
-    # Esto hace que en Swagger aparezca data de ejemplo lista para usar
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "generos_id": [1, 12, 5]  # Rock, Hard Rock, Punk
-                }
-            ]
-        }
-    }
-
-class TransactionCreate(BaseModel):
-    item_id: int
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "item_id": 31  # Ejemplo "Thriller"
-                }
-            ]
-        }
-    }
-
-# Endpoints
+# --- Endpoints ---
 
 @router.get("/", summary="Verificar estado del sistema")
 def health_check():
@@ -46,12 +16,20 @@ def health_check():
     return {"status": "ok", "message": "API de Recomendaciones - ACTIVA"}
 
 @router.post("/users", status_code=201, summary="Crear nuevo usuario")
-def create_new_user(user: UserCreate):
+def create_new_user(
+    generos_id: List[int] = Query(
+        ..., 
+        title="Géneros Favoritos",
+        description="Seleccione los IDs de los géneros (mínimo 3).",
+        min_length=3, 
+        examples=[1, 12, 5]
+    )
+):
     """
-    Registra un usuario y sus gustos iniciales para poder recomendarle música inmediatamente.
+    Registra un usuario nuevo con al menos 3 géneros preferidos.
     """
     try:
-        new_id = service.create_user(user.generos_id)
+        new_id = service.create_user(generos_id)
         return {"user_id": new_id, "message": "Usuario creado exitosamente"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -65,11 +43,11 @@ def get_recommendations(user_id: int):
     return {"user_id": user_id, "recommendations": items}
 
 @router.post("/users/{user_id}/transaction", summary="Registrar compra")
-def register_purchase(user_id: int, transaction: TransactionCreate):
+def register_purchase(user_id: int, item_id: int):
     """
-    Guarda la interacción 'usuario compra ítem'.
+    Registra una compra.
     """
-    success = service.add_transaction(user_id, transaction.item_id)
+    success = service.add_transaction(user_id, item_id)
     if success:
         return {"message": "Compra registrada"}
     else:
