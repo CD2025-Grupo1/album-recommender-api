@@ -20,13 +20,14 @@ def create_new_user(
     generos_id: List[int] = Query(
         ..., 
         title="Géneros Favoritos",
-        description="Seleccione los IDs de los géneros (mínimo 3).",
-        min_length=3, 
-        examples=[1, 12, 5]
+        description="Seleccione los IDs de los géneros (mínimo 3, máximo 5).",
+        min_length=3,
+        max_length=5, 
+        examples=[1, 12, 5] 
     )
 ):
     """
-    Registra un usuario nuevo con al menos 3 géneros preferidos.
+    Registra un usuario nuevo con al menos 3 géneros preferidos y un máximo de 5.
     """
     try:
         new_id = service.create_user(generos_id)
