@@ -27,3 +27,6 @@ DB_PORT=5432
 DB_NAME=nombre_de_tu_bd
 DB_USER=postgres
 DB_PASSWORD=tu_contraseña
+
+### 5. Ejecutar Aplicación (siempre dentro del entorno)
+python -m src.app
