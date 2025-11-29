@@ -23,7 +23,6 @@ class RecommenderService:
             print(f"Usuario {user_id} es nuevo (0 compras). Usando Cold Start.")
             return self._get_cold_start_items(user_id, top_k)
         else:
-            # acá va lógica colaborativa (no implementada aún)
             print(f"Usuario {user_id} tiene historial. Usando lógica estándar.")
             return self._get_hybrid_recommendations(user_id, top_k)
         
