@@ -53,6 +53,19 @@ CREATE TABLE Compras (
 );
 
 
+-- Tabla de Matriz de Similitud (Item-Item)
+CREATE TABLE MatrizSimilitud (
+    item_id_a INTEGER NOT NULL,
+    item_id_b INTEGER NOT NULL,
+    score FLOAT NOT NULL,
+    PRIMARY KEY (item_id_a, item_id_b),
+    FOREIGN KEY (item_id_a) REFERENCES Items(item_id),
+    FOREIGN KEY (item_id_b) REFERENCES Items(item_id)
+);
+
+CREATE INDEX idx_similitud_a ON MatrizSimilitud(item_id_a);
+
+
 -- ===============================
 --		 ITEMS DISPONIBLES
 -- ===============================
