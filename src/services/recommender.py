@@ -1,13 +1,15 @@
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import logging
 from src.database import get_data_as_dataframe, execute_non_query
+
+logger = logging.getLogger(__name__)
 
 class RecommenderService:
     def __init__(self):
+
         # Parámetros del modelo híbrido
-        #self.WEIGHT_CF = 0.6  # fltrado colaborativo 
-        #self.WEIGHT_CBF = 0.4 # basado en contenido 
         self.BOOST_VALUE = 0.1 # valor a sumar si coincide con preferencia explícita
 
     def get_recommendations(self, user_id: int, top_k: int = 5):
@@ -20,10 +22,10 @@ class RecommenderService:
         compras_count = df_check.iloc[0]["total"] if df_check is not None else 0
 
         if compras_count < 1: # cold start
-            print(f"Usuario {user_id} es nuevo (0 compras). Usando Cold Start.")
+            logger.info(f"Usuario {user_id} es nuevo (0 compras). Usando Cold Start.") 
             return self._get_cold_start_items(user_id, top_k)
         else:
-            print(f"Usuario {user_id} tiene historial. Usando lógica estándar.")
+            logger.info(f"Usuario {user_id} tiene historial ({compras_count} compras). Usando lógica estándar.")
             return self._get_hybrid_recommendations(user_id, top_k, compras_count)
         
     #  =========================================================================
@@ -59,13 +61,13 @@ class RecommenderService:
         
         # Fallback de seguridad
         if not final_list:
-            print("   [WARN] El modelo híbrido no retornó candidatos. Usando Fallback.")
+            logger.warning("El modelo híbrido no retornó candidatos. Usando Fallback.") # 
             return self._get_global_top_sellers(k)
         
         # Recortar al Top K solicitado
         top_k_recs = final_list[:k]
         
-        # 6. PASO EXTRA: Enriquecer con Título y Artista
+        # 6. Enriquecer con Título y Artista
         return self._enrich_results(top_k_recs)
 
     def _enrich_results(self, recommendations: list):
@@ -93,16 +95,15 @@ class RecommenderService:
         for rec in recommendations:
             iid = rec['item_id']
             if iid in details_map:
-                # Crear nuevo dict fusionando datos
                 enriched_item = {
                     "item_id": iid,
                     "titulo": details_map[iid]['titulo'],
                     "artista": details_map[iid]['artista'],
-                    "score": rec['score'] # Mantenemos el score para transparencia
+                    "score": rec['score'] 
                 }
                 enriched_list.append(enriched_item)
             else:
-                enriched_list.append(rec) # Por si acaso
+                enriched_list.append(rec) 
                 
         return enriched_list
     
@@ -111,17 +112,18 @@ class RecommenderService:
         Calcula la matriz de similitud Item-Item y guarda en la tabla MatrizSimilitud.
         Se debe llamar al iniciar la app y tras compras significativas.
         """
-        print("   [Training] Iniciando re-entrenamiento del modelo CF...")
+        
+        logger.info("[Training] Iniciando re-entrenamiento del modelo CF...")
         
         # 1. Traer datos crudos
         sql = "SELECT user_id, item_id FROM Compras"
         df_compras = get_data_as_dataframe(sql)
         
         if df_compras is None or df_compras.empty:
-            print("   [Training] No hay datos suficientes para entrenar.")
+            logger.warning("[Training] No hay datos suficientes para entrenar.") 
             return
 
-        # 2. Crear Matriz Dispersa en Memoria
+        # 2. Crear matriz en Memoria
         user_item_matrix = df_compras.pivot_table(
             index='user_id', 
             columns='item_id', 
@@ -150,9 +152,9 @@ class RecommenderService:
                             "sc": score
                         })
         
-        # 5. Persistir en Base de Datos (Transacción Atómica)
+        # 5. Persistir en Base de Datos 
         if updates:
-            print(f"   [Training] Guardando {len(updates)} relaciones de similitud en BD...")
+            logger.info(f"[Training] Guardando {len(updates)} relaciones de similitud en BD...")
             
             # Limpiar tabla
             execute_non_query("DELETE FROM MatrizSimilitud")
@@ -167,13 +169,13 @@ class RecommenderService:
                 sql_insert = f"INSERT INTO MatrizSimilitud (item_id_a, item_id_b, score) VALUES {','.join(batch)}"
                 execute_non_query(sql_insert)
                 
-            print("   [Training] Modelo persistido correctamente.")
+            logger.info("[Training] Modelo persistido correctamente.")
 
     def _get_collaborative_filtering_candidates(self, user_id: int):
         """
         Versión Optimizada: Consulta la BD en lugar de calcular al vuelo.
         """
-        print("   -> Consultando Modelo CF persistido en BD...")
+        logger.debug("Consultando Modelo CF persistido en BD...") 
         
         # Lógica SQL:
         # 1. Encuentra mis compras (Items A)
@@ -197,15 +199,9 @@ class RecommenderService:
         df_recs = get_data_as_dataframe(sql, params={"uid": user_id})
         
         if df_recs is not None and not df_recs.empty:
-            # --- BLOQUE DE DEBUG TEMPORAL ---
-            print(f"      [DEBUG CF] Encontrados {len(df_recs)} candidatos colaborativos.")
-            print(f"      [DEBUG CF] Top 3 candidatos:")
-            for i, row in df_recs.head(3).iterrows():
-                print(f"         - Item ID: {int(row['item_id'])} | Score: {row['score_cf']:.4f}")
-            # --------------------------------
             return df_recs.to_dict(orient="records")
         
-        print("      [DEBUG CF] No se encontraron candidatos (o el usuario ya compró todo lo relevante).")
+        logger.debug("No se encontraron candidatos CF.")
 
         return []
 
@@ -214,7 +210,7 @@ class RecommenderService:
         Calcula candidatos basándose en la similitud de atributos (Géneros).
         Crea un perfil del usuario promediando sus compras y busca ítems similares (Coseno).
         """
-        print("   -> Calculando: Content-Based Filtering (Perfil de Usuario)...")
+        logger.debug("Calculando: Content-Based Filtering (Perfil de Usuario)...") 
         
         # 1. Obtener Metadatos (Géneros) de todos los ítems
         #    Traemos item_id y el nombre del género para hacer One-Hot Encoding
@@ -231,14 +227,12 @@ class RecommenderService:
         df_bought = get_data_as_dataframe(sql_bought, params={"uid": user_id})
         
         if df_items is None or df_bought is None or df_bought.empty:
-            print("      [!] Falta información para calcular CBF.")
             return []
             
         bought_ids = df_bought["item_id"].tolist()
         
         # 3. Construir la Matriz de Características (Item-Features)
         #    Queremos una tabla donde: Índice=Item, Columnas=Géneros, Valor=1 si lo tiene.
-        #    Usamos pandas.get_dummies y luego sumamos por item_id (porque un ítem tiene varios géneros).
         item_features = pd.get_dummies(df_items.set_index('item_id')['genero'])
         item_features = item_features.groupby('item_id').sum()
         
@@ -248,7 +242,7 @@ class RecommenderService:
         user_history_features = item_features.loc[item_features.index.isin(bought_ids)]
         
         if user_history_features.empty:
-            print("      [!] El usuario compró ítems que no tienen metadatos de género.")
+            logger.warning("El usuario compró ítems sin metadatos de género.") 
             return []
             
         # El "Perfil" es el promedio de los vectores de sus compras.
@@ -277,11 +271,7 @@ class RecommenderService:
         # Ordenamos solo para debug
         recommendations.sort(key=lambda x: x['score_cbf'], reverse=True)
         
-        if recommendations:
-            print(f"      [DEBUG CBF] Encontrados {len(recommendations)} candidatos por contenido.")
-            print(f"      [DEBUG CBF] Top 3 (por similitud de género):")
-            for rec in recommendations[:3]:
-                print(f"         - Item ID: {rec['item_id']} | Score: {rec['score_cbf']:.4f}")
+        if recommendations: pass
         
         return recommendations
 
@@ -289,8 +279,6 @@ class RecommenderService:
         """
         Unifica las listas de CF y CBF, aplica pesos y el Booster por preferencias explícitas.
         """
-        print("   -> Fusionando modelos (Hybrid Reranking)...")
-
         # 1. Crear diccionario maestro de scores
         #    Estructura: { item_id: {'score': float, 'origin': str} }
         combined_scores = {}
@@ -314,9 +302,8 @@ class RecommenderService:
             else:
                 combined_scores[iid] = score
 
-        # 2. Aplicar BOOSTER de Preferencias Explícitas
-        #    Si el álbum es de un género que el usuario eligió al registrarse -> Sumar puntos extra.
-        
+        # 2. Aplicar refuerzo de Preferencias Explícitas
+
         # Traer géneros explícitos del usuario
         sql_prefs = "SELECT genero_id FROM PreferenciasUsuario WHERE user_id = :uid"
         df_prefs = get_data_as_dataframe(sql_prefs, params={"uid": user_id})
@@ -326,7 +313,6 @@ class RecommenderService:
             candidate_ids = list(combined_scores.keys())
             
             # Traer géneros de los candidatos
-            # (Hacemos una query IN para no matar la BD con queries individuales)
             if candidate_ids:
                 sql_item_genres = f"""
                     SELECT item_id, genero_id 
@@ -336,7 +322,7 @@ class RecommenderService:
                 df_item_genres = get_data_as_dataframe(sql_item_genres)
                 
                 if df_item_genres is not None:
-                    # Iterar para ver quién merece booster
+                    # Iterar para ver quién merece el refuerzo
                     for iid in candidate_ids:
                         # Géneros de este ítem
                         genres_of_item = set(df_item_genres[df_item_genres['item_id'] == iid]['genero_id'])
@@ -345,7 +331,6 @@ class RecommenderService:
                         if not genres_of_item.isdisjoint(user_explicit_genres):
                             original = combined_scores[iid]
                             combined_scores[iid] += self.BOOST_VALUE
-                            # print(f"      [BOOSTER] Item {iid} subió de {original:.3f} a {combined_scores[iid]:.3f}")
 
         # 3. Formatear salida final
         final_list = []
@@ -358,7 +343,7 @@ class RecommenderService:
         # Ordenar descendente por score final
         final_list.sort(key=lambda x: x['score'], reverse=True)
         
-        print(f"      [HYBRID] Ranking final generado con {len(final_list)} candidatos.")
+        logger.info(f"Ranking híbrido generado con {len(final_list)} candidatos.") 
         return final_list
 
     def _filter_purchased_items(self, user_id: int, recommendations: list):

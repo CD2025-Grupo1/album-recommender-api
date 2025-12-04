@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from typing import Optional, Dict, Any
 
 # Configuración de Logs
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Cargar variables de entorno y configurar conexión con BD
