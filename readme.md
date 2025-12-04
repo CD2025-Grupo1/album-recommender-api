@@ -39,13 +39,14 @@ DB_PASSWORD=admin
 ### 5. Configuración de la Base de Datos
 El sistema requiere una base de datos poblada.
 
-* Crear la BD: accede a tu gestor de base de datos y crea una base vacía con el nombre que definiste en el paso anterior (ej: CD_TPI)
+* Crear la BD: acceder a tu gestor de base de datos y crea una base vacía con el nombre que definiste en el paso anterior (ej: CD_TPI)
 
 ```sql
 CREATE DATABASE "CD_TPI";
 ```
 
-* Probar la BD: ejecuta el script SQL de inicialización que se encuentra en archivo init_db.sql 
+* Población inicial de la BD: ejecutar el script SQL de inicialización que se encuentra en archivo init_db.sql. Este contiene datos para probar el sistema con lo mínimo indispensable.
+* Población avanzada de la BD: ejecutar el script SQL "seeder" de la misma carpeta que el anterior. Con este habrá más de 200 usuarios con cerca de 50 compras cada uno, ideal para pruebas reales.
 
 ### 6. Ejecutar Aplicación (siempre dentro del entorno)
 ```bash
