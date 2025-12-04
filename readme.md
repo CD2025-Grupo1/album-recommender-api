@@ -1,58 +1,110 @@
-# Instalación y Configuración del Entorno
+# Sistema Recomendador de Álbumes - TPI Ciencia de Datos 2025
 
-Sigue estos pasos para levantar el proyecto en tu máquina local.
+Este repositorio contiene la implementación de una API RESTful desarrollada bajo la metodología CRISP-DM para un sistema de recomendación de álbumes musicales. El objetivo del proyecto es personalizar la experiencia de usuario y aumentar las ventas proyectadas en un 10% para el próximo ciclo comercial.
 
-## Prerrequisitos
-- Tener Python 3.9 o superior instalado.
-- Tener PostgreSQL instalado y corriendo.
+Realizado por los integrantes del grupo 1 de Ciencia de Datos 2025.
 
-## Ejecutar Aplicación - Paso a Paso
+## Descripción del Proyecto
 
-### 1. Crear Entorno Virtual
+El sistema funciona con un catálogo fijo de 100 álbumes clásicos y modernos y utiliza un enfoque híbrido que evoluciona con el usuario:
+1.  **Cold Start:** para usuarios nuevos, utiliza preferencias explícitas (géneros favoritos) y una estrategia de *Round Robin* para garantizar diversidad.
+2.  **Usuarios Recurrentes:** Implementa un Sistema Híbrido Ponderado que combina:
+    * **Filtrado Colaborativo (Item-Item):** Recomendaciones basadas en patrones de compra de la comunidad (Matriz de Similitud).
+    * **Content-Based Filtering:** Recomendaciones basadas en el perfil de gustos del usuario (Vectores de Géneros).
+
+La ponderación entre estos modelos es dinámica y se ajusta automáticamente según el historial de compras del usuario.
+
+---
+
+## Instalación y Configuración
+
+Seguí estos pasos para levantar el proyecto en tu máquina local.
+
+### Prerrequisitos
+* Python 3.9 o superior.
+* PostgreSQL instalado y ejecutándose.
+
+### Paso a Paso
+
+1.  **Clonar el repositorio y crear entorno virtual:**
 ```bash
+# En Windows
 python -m venv venv
-```
-
-### 2. Activar Entorno Virtual
-```bash
 .\venv\Scripts\activate
+
+# En Linux/Mac
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-### 3. Instalar Dependencias
+2.  **Instalar dependencias:**
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Configurar Variables de Entorno
-Crear un archivo llamado .env en la raíz del proyecto (junto a este README) y define tus credenciales locales. No subas este archivo al repositorio.
+3.  **Configurar Variables de Entorno:**
+Crear un archivo ".env" en la raíz del proyecto (junto a este README) y definir las credenciales locales. Ejemplo de contenido:
+```ini
+    DB_HOST=localhost
+    DB_PORT=5433 # generalmente se usa 5432
+    DB_NAME=CD_TPI
+    DB_USER=postgres
+    DB_PASSWORD=admin
+```
 
-Ejemplo de contenido:
+4.  **Configuración de la Base de Datos:**
+* **Crear BD:** acceder al gestor de base de datos y crear una base vacía con el nombre definido en el paso anterior (ej: CD_TPI)
+* **Inicializar Esquema:**: ejecutar el script SQL de inicialización que se encuentra en archivo init_db.sql. Este creará las tablas, insertará el catálogo completo y algunos usuarios para un funcionamiento con lo mínimo indispensable. 
+* **Poblar Datos (Seeder):** ejecutar el script SQL seeder de la misma carpeta. Este poblará la base de datos con más de 200 usuarios con más de 50 compras cada uno. Esto asegura un funcionamiento que simula la realidad.
+
+
+5.  **Ejecutar la API:**
+    ```bash
+    python -m src.app
+    ```
+
+## API Reference
+
+La documentación interactiva (Swagger UI) está disponible en: `http://127.0.0.1:8000/docs`.
+
+### Endpoints Principales
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/users` | **Registro de Usuario:** Crea un usuario y recibe sus géneros favoritos (Input para Cold Start). |
+| `GET` | `/recommend/{user_id}` | **Obtener Recomendaciones:** Devuelve el Top 5 de álbumes sugeridos usando la lógica híbrida. |
+| `POST` | `/users/{user_id}/transaction` | **Registrar Compra:** Guarda una transacción y dispara el reentrenamiento incremental (si corresponde). |
+| `GET` | `/` | **Health Check:** Verifica que la API esté activa. |
+
+---
+
+## Arquitectura del Modelo
+
+La lógica de recomendación se encuentra en `src/services/recommender.py`.
+
+### Estrategia Híbrida Dinámica
+El sistema decide qué peso dar al *Filtrado Colaborativo (CF)* y al *Basado en Contenido (CBF)* según el historial del usuario ($N$ compras):
+
+* **Exploración ($N \le 15$):** 70% CBF / 30% CF. Se priorizan los gustos del usuario sobre la tendencia global.
+* **Transición ($15 < N \le 25$):** 50% CBF / 50% CF. Balanceo de estrategias.
+* **Explotación ($N > 25$):** 30% CBF / 70% CF. El sistema confía más en la inteligencia colectiva y patrones ocultos.
+
+### Booster
+Adicionalmente, se aplica un "refuerzo" a los ítems candidatos que coinciden explícitamente con los géneros declarados por el usuario al registrarse, asegurando que sus intereses principales siempre tengan relevancia.
+
+---
+
+## Evaluación y Métricas
+
+Se incluye un script de validación en `src/tests/model_evaluation.py` que utiliza una estrategia de **Hold-Out Temporal** (separa el 20% de las últimas compras de cada usuario para test).
+
+Métricas utilizadas:
+* **Hit Rate:** Porcentaje de veces que el ítem real comprado apareció en las recomendaciones.
+* **Jaccard Index:** Similitud entre el conjunto recomendado y el conjunto realmente comprado.
+* **Catalog Coverage:** Porcentaje del catálogo total que el sistema es capaz de recomendar (evita sesgos de popularidad extrema).
+
+Para ejecutar la evaluación:
 ```bash
-DB_HOST=localhost
-DB_PORT=5433 # generalmente se usa 5432
-DB_NAME=CD_TPI
-DB_USER=postgres
-DB_PASSWORD=admin
+python -m src.tests.model_evaluation
 ```
-
-### 5. Configuración de la Base de Datos
-El sistema requiere una base de datos poblada.
-
-* Crear la BD: acceder a tu gestor de base de datos y crea una base vacía con el nombre que definiste en el paso anterior (ej: CD_TPI)
-
-```sql
-CREATE DATABASE "CD_TPI";
-```
-
-* Población inicial de la BD: ejecutar el script SQL de inicialización que se encuentra en archivo init_db.sql. Este contiene datos para probar el sistema con lo mínimo indispensable.
-* Población avanzada de la BD: ejecutar el script SQL "seeder" de la misma carpeta que el anterior. Con este habrá más de 200 usuarios con cerca de 50 compras cada uno, ideal para pruebas reales.
-
-### 6. Ejecutar Aplicación (siempre dentro del entorno)
-```bash
-python -m src.app
-```
-
-Una vez iniciado:
-* API: http://127.0.0.1:8000
-* Swagger: http://127.0.0.1:8000/docs
