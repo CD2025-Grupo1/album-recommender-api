@@ -6,8 +6,8 @@ from src.database import get_data_as_dataframe, execute_non_query
 class RecommenderService:
     def __init__(self):
         # Parámetros del modelo híbrido
-        self.WEIGHT_CF = 0.6  # fltrado colaborativo 
-        self.WEIGHT_CBF = 0.4 # basado en contenido 
+        #self.WEIGHT_CF = 0.6  # fltrado colaborativo 
+        #self.WEIGHT_CBF = 0.4 # basado en contenido 
         self.BOOST_VALUE = 0.1 # valor a sumar si coincide con preferencia explícita
 
     def get_recommendations(self, user_id: int, top_k: int = 5):
@@ -24,28 +24,37 @@ class RecommenderService:
             return self._get_cold_start_items(user_id, top_k)
         else:
             print(f"Usuario {user_id} tiene historial. Usando lógica estándar.")
-            return self._get_hybrid_recommendations(user_id, top_k)
+            return self._get_hybrid_recommendations(user_id, top_k, compras_count)
         
     #  =========================================================================
     #                   LÓGICA DEL SISTEMA HÍBRIDO PONDERADO 
     #  =========================================================================
 
+    def _get_hybrid_recommendations(self, user_id: int, k: int, n_compras: int):
+        """
+        Implementación del Sistema Híbrido con Pesos Dinámicos según madurez del usuario.
+        """
 
-    def _get_hybrid_recommendations(self, user_id: int, k: int):
-        """
-        Implementación del Sistema Híbrido Ponderado.
-        Coordina CF, CBF y el Booster de Preferencias.
-        """
-        # 1. Obtener candidatos y scores vía Filtrado Colaborativo (Item-Item)
+        # 1. Definir Pesos Dinámicos
+        # Si tiene pocas compras, el CF es débil -> confiamos en el contenido (CBF)
+        # Si tiene muchas, el CF es fuerte -> confiamos en la inteligencia colectiva
+        if n_compras <= 15:
+            w_cf, w_cbf = 0.3, 0.7 
+        elif n_compras <= 25:
+            w_cf, w_cbf = 0.5, 0.5
+        else:
+            w_cf, w_cbf = 0.7, 0.3
+
+        # 2. Obtener candidatos y scores vía Filtrado Colaborativo (Item-Item)
         cf_candidates = self._get_collaborative_filtering_candidates(user_id)
         
-        # 2. Obtener candidatos y scores vía Content-Based (Perfil de Usuario)
+        # 3. Obtener candidatos y scores vía Content-Based (Perfil de Usuario)
         cbf_candidates = self._get_content_based_candidates(user_id)
         
-        # 3. Combinar resultados, aplicar pesos y booster
-        combined_recommendations = self._combine_and_rank(user_id, cf_candidates, cbf_candidates)
+        # 4. Combinar resultados, aplicar pesos y booster
+        combined_recommendations = self._combine_and_rank(user_id, cf_candidates, cbf_candidates, w_cf, w_cbf)
         
-        # 4. Filtrar ítems ya comprados
+        # 5. Filtrar ítems ya comprados
         final_list = self._filter_purchased_items(user_id, combined_recommendations)
         
         # Fallback de seguridad
@@ -56,7 +65,7 @@ class RecommenderService:
         # Recortar al Top K solicitado
         top_k_recs = final_list[:k]
         
-        # 5. PASO EXTRA: Enriquecer con Título y Artista
+        # 6. PASO EXTRA: Enriquecer con Título y Artista
         return self._enrich_results(top_k_recs)
 
     def _enrich_results(self, recommendations: list):
@@ -276,7 +285,7 @@ class RecommenderService:
         
         return recommendations
 
-    def _combine_and_rank(self, user_id: int, cf_recs: list, cbf_recs: list):
+    def _combine_and_rank(self, user_id: int, cf_recs: list, cbf_recs: list, w_cf: float, w_cbf: float):
         """
         Unifica las listas de CF y CBF, aplica pesos y el Booster por preferencias explícitas.
         """
@@ -286,16 +295,18 @@ class RecommenderService:
         #    Estructura: { item_id: {'score': float, 'origin': str} }
         combined_scores = {}
 
-        # Procesar CF (Peso 0.6)
+        # Procesar CF ponderado
         for item in cf_recs:
             iid = item['item_id']
-            score = item['score_cf'] * self.WEIGHT_CF
+            # Normalizamos score CF para que compita
+            raw_score = item['score_cf']
+            score = raw_score * w_cf
             combined_scores[iid] = score
 
-        # Procesar CBF (Peso 0.4)
+        # Procesar CBF ponderado
         for item in cbf_recs:
             iid = item['item_id']
-            score = item['score_cbf'] * self.WEIGHT_CBF
+            score = item['score_cbf'] * w_cbf
             
             # Si ya existe (vino por CF), sumamos. Si no, inicializamos.
             if iid in combined_scores:
