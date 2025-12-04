@@ -33,6 +33,9 @@ DECLARE
     probability_threshold FLOAT;
     
 BEGIN
+
+PERFORM setval(pg_get_serial_sequence('Usuarios', 'user_id'), (SELECT MAX(user_id) FROM Usuarios));
+
     -- Vamos a generar 200 usuarios en total
     -- Distribución: 
     -- 1. Rockeros (30% -> 60 usuarios)
