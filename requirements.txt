@@ -1,17 +1,11 @@
-# --- Ciencia de Datos ---
 pandas
 numpy
 scikit-learn
-
-# --- Base de Datos ---
 sqlalchemy
 psycopg2-binary
 python-dotenv
-
-# --- API y Servidor Web ---
 fastapi
 uvicorn[standard]
 pydantic
-
-# --- Desarrollo y Notebooks ---
 ipykernel
+httpx

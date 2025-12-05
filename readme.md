@@ -108,3 +108,10 @@ Para ejecutar la evaluación:
 ```bash
 python -m src.tests.model_evaluation
 ```
+
+Además, el script `src/tests/test_latency.py` está diseñado para medir la latencia, uno de los principales criterios de éxito del proyecto.
+
+Para ejecutarlo
+```bash
+python -m src.tests.test_latency
+```
