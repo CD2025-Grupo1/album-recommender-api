@@ -23,10 +23,67 @@ class RecommenderService:
 
         if compras_count < 1: # cold start
             logger.info(f"Usuario {user_id} es nuevo (0 compras). Usando Cold Start.") 
-            return self._get_cold_start_items(user_id, top_k)
+            raw_recs = self._get_cold_start_items(user_id, top_k)
+            return self._enrich_results(raw_recs)
         else:
             logger.info(f"Usuario {user_id} tiene historial ({compras_count} compras). Usando lógica estándar.")
             return self._get_hybrid_recommendations(user_id, top_k, compras_count)
+
+    def _enrich_results(self, recommendations: list):
+        """
+        Recibe una lista de dicts con 'item_id'.
+        Consulta la BD para traer TODOS los datos y formatear al esquema Item.
+        """
+        if not recommendations:
+            return []
+            
+        # Extraer los IDs para hacer una sola query
+        ids = [str(r['item_id']) for r in recommendations]
+        if not ids:
+            return []
+            
+        id_str = ",".join(ids)
+        
+        # Traemos TODO (*) para llenar los atributos
+        sql = f"SELECT * FROM Items WHERE item_id IN ({id_str})"
+        df_details = get_data_as_dataframe(sql)
+        
+        if df_details is None or df_details.empty:
+            return recommendations
+            
+        # Convertir a diccionario para búsqueda rápida
+        details_map = df_details.set_index('item_id').to_dict(orient='index')
+        
+        enriched_list = []
+        for rec in recommendations:
+            iid = rec['item_id']
+            if iid in details_map:
+                details = details_map[iid]
+                
+                # Manejo seguro del score (Cold Start no tiene score, tiene ventas)
+                score_val = rec.get('score', 0.0)
+                
+                enriched_item = {
+                    "id": iid,
+                    "name": details['titulo'], 
+                    "attributes": {
+                        "artista": details['artista'],
+                        "anio": int(details['anio']),
+                        "pais": details['pais'],
+                        "idioma": details['idioma'],
+                        "score_match": score_val 
+                    }
+                }
+                enriched_list.append(enriched_item)
+            else:
+                # Fallback
+                enriched_list.append({
+                    "id": iid, 
+                    "name": "Desconocido", 
+                    "attributes": {}
+                }) 
+                
+        return enriched_list
         
     #  =========================================================================
     #                   LÓGICA DEL SISTEMA HÍBRIDO PONDERADO 
@@ -70,42 +127,35 @@ class RecommenderService:
         # 6. Enriquecer con Título y Artista
         return self._enrich_results(top_k_recs)
 
-    def _enrich_results(self, recommendations: list):
+    def get_user_data(self, user_id: int):
         """
-        Recibe una lista de dicts con 'item_id' y 'score'.
-        Consulta la BD para agregar 'titulo' y 'artista'.
+        Recupera datos básicos del usuario Y sus géneros favoritos.
         """
-        if not recommendations:
-            return []
+        # 1. Datos básicos del usuario
+        # Traemos * para que si agregaste la columna username la traiga, si no, no rompe
+        sql = "SELECT * FROM Usuarios WHERE user_id = :uid"
+        df = get_data_as_dataframe(sql, params={"uid": user_id})
+        
+        if df is not None and not df.empty:
+            # Convertimos a dict y tratamos la fecha
+            data = df.iloc[0].to_dict()
+            data['fecha_creacion'] = str(data['fecha_creacion'])
             
-        # Extraer los IDs para hacer una sola query
-        ids = [str(r['item_id']) for r in recommendations]
-        id_str = ",".join(ids)
-        
-        sql = f"SELECT item_id, titulo, artista FROM Items WHERE item_id IN ({id_str})"
-        df_details = get_data_as_dataframe(sql)
-        
-        if df_details is None or df_details.empty:
-            return recommendations
+            # 2. Recuperar Preferencias (Géneros favoritos)
+            sql_prefs = "SELECT genero_id FROM PreferenciasUsuario WHERE user_id = :uid"
+            df_prefs = get_data_as_dataframe(sql_prefs, params={"uid": user_id})
             
-        # Convertir a un diccionario para búsqueda rápida {item_id: {titulo: X, artista: Y}}
-        details_map = df_details.set_index('item_id').to_dict(orient='index')
-        
-        enriched_list = []
-        for rec in recommendations:
-            iid = rec['item_id']
-            if iid in details_map:
-                enriched_item = {
-                    "item_id": iid,
-                    "titulo": details_map[iid]['titulo'],
-                    "artista": details_map[iid]['artista'],
-                    "score": rec['score'] 
-                }
-                enriched_list.append(enriched_item)
+            # Si tiene preferencias, las convertimos a lista de ints
+            if df_prefs is not None and not df_prefs.empty:
+                data['preferencias'] = df_prefs['genero_id'].tolist()
             else:
-                enriched_list.append(rec) 
+                data['preferencias'] = []
                 
-        return enriched_list
+            return data
+            
+        return None
+
+
     
     def train_model(self):
         """
@@ -459,21 +509,36 @@ class RecommenderService:
     #                      GESTIÓN DE USUARIOS Y TRANSACCIONES
     # =========================================================================
     
-    def create_user(self, generos_preferidos: list[int]):
+    def create_user(self, username: str, attributes: dict):
         """
-        Inserta un usuario real en la BD. Devuelve el ID del usuario creado.
+        Crea usuario con username opcional y procesa atributos (como géneros favoritos).
         """
+        # 1. Insertar usuario en la tabla
+        sql_user = "INSERT INTO Usuarios (username, fecha_creacion) VALUES (:uname, NOW()) RETURNING user_id"
         
-        sql_user = "INSERT INTO Usuarios (fecha_creacion) VALUES (NOW()) RETURNING user_id;"
+        # Como execute_non_query devuelve rowcount y no el ID, hacemos un pequeño "truco" 
+        # o usamos una query directa si tu helper lo permite. 
+        # Para mantener consistencia con tu helper actual (que devuelve int de filas afectadas),
+        # hacemos insert y luego select max (es seguro en este contexto académico/baja concurrencia).
         
-        execute_non_query("INSERT INTO Usuarios (fecha_creacion) VALUES (NOW())")
-        df = get_data_as_dataframe("SELECT MAX(user_id) as id FROM Usuarios") # toma el último ID, simplificación
+        execute_non_query(
+            "INSERT INTO Usuarios (username, fecha_creacion) VALUES (:uname, NOW())",
+            params={"uname": username}
+        )
+        
+        # Recuperamos el ID generado
+        df = get_data_as_dataframe("SELECT MAX(user_id) as id FROM Usuarios")
         new_user_id = int(df.iloc[0]["id"])
 
-        # Insertar Preferencias Explícitas
-        for genero_id in generos_preferidos:
-            sql_pref = "INSERT INTO PreferenciasUsuario (user_id, genero_id) VALUES (:uid, :gid)"
-            execute_non_query(sql_pref, params={"uid": new_user_id, "gid": genero_id})
+        # 2. Procesar Preferencias (Cold Start)
+        # Buscamos si en los atributos vino algo como "generos" o "preferences"
+        # El profesor puso un ejemplo genérico, así que definimos nosotros la key: "generos_id"
+        generos = attributes.get("generos_id", [])
+        
+        if generos and isinstance(generos, list):
+            for genero_id in generos:
+                sql_pref = "INSERT INTO PreferenciasUsuario (user_id, genero_id) VALUES (:uid, :gid)"
+                execute_non_query(sql_pref, params={"uid": new_user_id, "gid": genero_id})
             
         return new_user_id
 

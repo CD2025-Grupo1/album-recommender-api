@@ -30,6 +30,7 @@ CREATE TABLE ItemGeneros (
 -- Tabla de Usuarios
 CREATE TABLE Usuarios (
     user_id SERIAL PRIMARY KEY,
+    username VARCHAR(100), 
     fecha_creacion TIMESTAMP NOT NULL
 );
 
