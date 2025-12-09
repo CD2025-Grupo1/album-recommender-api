@@ -49,8 +49,8 @@ if __name__ == "__main__":
     
     # CASO A: Usuario Recurrente (Usa Modelo Híbrido)
     # Usamos User ID 1 (El 'Rockero' del seed, que tiene historial)
-    medir_latencia("/recommend/1", "Usuario Recurrente (Híbrido)", n_consultas=50)
+    medir_latencia("/user/1/recommend?n=5", "Usuario Recurrente (Híbrido)", n_consultas=50)
 
     # CASO B: Usuario Nuevo (Usa Cold Start)
     # Usamos User ID 6 (Uno de los de prueba definidos en init_db sin compras)
-    medir_latencia("/recommend/6", "Usuario Nuevo (Cold Start)", n_consultas=50)
+    medir_latencia("/user/6/recommend?n=5", "Usuario Nuevo (Cold Start)", n_consultas=50)
