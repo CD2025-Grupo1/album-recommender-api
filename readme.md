@@ -72,9 +72,10 @@ La documentación interactiva (Swagger UI) está disponible en: `http://127.0.0.
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/users` | **Registro de Usuario:** Crea un usuario y recibe sus géneros favoritos (Input para Cold Start). |
-| `GET` | `/recommend/{user_id}` | **Obtener Recomendaciones:** Devuelve el Top 5 de álbumes sugeridos usando la lógica híbrida. |
-| `POST` | `/users/{user_id}/transaction` | **Registrar Compra:** Guarda una transacción y dispara el reentrenamiento incremental (si corresponde). |
+| `POST` | `/user` | **Crear Usuario:** Registra un nuevo usuario recibiendo `username` y `attributes` (incluyendo géneros para Cold Start). |
+| `GET` | `/user/{userId}` | **Obtener Usuario:** Devuelve los datos básicos del usuario y sus géneros favoritos guardados. |
+| `GET` | `/user/{userId}/recommend` | **Obtener Recomendaciones:** Devuelve una lista de *n* álbumes sugeridos para el usuario. |
+| `POST` | `/user/{userId}/transaction` | **Registrar Compra:** Guarda una transacción, actualizando el historial y el entrenamiento incremental. |
 | `GET` | `/` | **Health Check:** Verifica que la API esté activa. |
 
 ---

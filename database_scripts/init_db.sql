@@ -2,7 +2,7 @@
 --		 CREACIÓN DE TABLAS
 -- ===============================
 
--- Tabla de Items (Catálogo fijo de 100 álbumes - ID manual)
+-- Tabla de Items (Catálogo fijo de 100 álbumes)
 CREATE TABLE Items (
     item_id INTEGER PRIMARY KEY,
     titulo VARCHAR(255) NOT NULL,
@@ -30,6 +30,7 @@ CREATE TABLE ItemGeneros (
 -- Tabla de Usuarios
 CREATE TABLE Usuarios (
     user_id SERIAL PRIMARY KEY,
+    username VARCHAR(100), 
     fecha_creacion TIMESTAMP NOT NULL
 );
 
@@ -42,7 +43,7 @@ CREATE TABLE PreferenciasUsuario (
     FOREIGN KEY (genero_id) REFERENCES Generos(genero_id)
 );
 
--- Tabla de Compras (Transaccional - Autoincremental)
+-- Tabla de Compras (Transaccional)
 CREATE TABLE Compras (
     compra_id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -355,7 +356,7 @@ SELECT 2, genero_id FROM Generos WHERE nombre IN ('Pop', 'Pop Latino', 'Urbano L
 INSERT INTO PreferenciasUsuario (user_id, genero_id)
 SELECT 3, genero_id FROM Generos WHERE nombre IN ('Hip Hop', 'Trap', 'R&B');
 
--- --- PERFILES DE TEST (Usuarios 6-15) ---
+-- --- PERFILES DE TEST (Usuarios 6-17) ---
 
 -- TEST 1: NICHOS LOCALES (Tango, Folklore y Rock en Español)
 INSERT INTO PreferenciasUsuario (user_id, genero_id) VALUES (6, 24), (6, 26), (6, 10);

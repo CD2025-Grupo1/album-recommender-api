@@ -97,11 +97,14 @@ def evaluate_holdout_temporal(proportion_test: float = 0.2, min_history: int = 5
             # Llamar al recomendador con top_k = k_dynamic
             recs = service.get_recommendations(uid, top_k=k_dynamic)
 
-            # Extraer item_ids recomendados (la estructura puede variar: dicts con item_id)
+            # Extraer item_ids recomendados 
             rec_item_ids = []
             for r in recs:
-                if isinstance(r, dict) and 'item_id' in r:
-                    rec_item_ids.append(int(r['item_id']))
+                if isinstance(r, dict):
+                    if 'id' in r:
+                        rec_item_ids.append(int(r['id']))
+                    elif 'item_id' in r:
+                        rec_item_ids.append(int(r['item_id']))
                 elif isinstance(r, int):
                     rec_item_ids.append(r)
 
