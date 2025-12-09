@@ -122,6 +122,7 @@ def get_recommendations(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
+
 @router.post("/user/{userId}/transaction", tags=["Sistema recomendador"], summary="Registrar compra")
 def register_purchase(
     userId: int = Path(..., description="ID del usuario que compra"), 

@@ -132,7 +132,6 @@ class RecommenderService:
         Recupera datos básicos del usuario Y sus géneros favoritos.
         """
         # 1. Datos básicos del usuario
-        # Traemos * para que si agregaste la columna username la traiga, si no, no rompe
         sql = "SELECT * FROM Usuarios WHERE user_id = :uid"
         df = get_data_as_dataframe(sql, params={"uid": user_id})
         
@@ -516,11 +515,6 @@ class RecommenderService:
         # 1. Insertar usuario en la tabla
         sql_user = "INSERT INTO Usuarios (username, fecha_creacion) VALUES (:uname, NOW()) RETURNING user_id"
         
-        # Como execute_non_query devuelve rowcount y no el ID, hacemos un pequeño "truco" 
-        # o usamos una query directa si tu helper lo permite. 
-        # Para mantener consistencia con tu helper actual (que devuelve int de filas afectadas),
-        # hacemos insert y luego select max (es seguro en este contexto académico/baja concurrencia).
-        
         execute_non_query(
             "INSERT INTO Usuarios (username, fecha_creacion) VALUES (:uname, NOW())",
             params={"uname": username}
@@ -531,8 +525,6 @@ class RecommenderService:
         new_user_id = int(df.iloc[0]["id"])
 
         # 2. Procesar Preferencias (Cold Start)
-        # Buscamos si en los atributos vino algo como "generos" o "preferences"
-        # El profesor puso un ejemplo genérico, así que definimos nosotros la key: "generos_id"
         generos = attributes.get("generos_id", [])
         
         if generos and isinstance(generos, list):
