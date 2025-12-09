@@ -113,7 +113,6 @@ PERFORM setval(pg_get_serial_sequence('Usuarios', 'user_id'), (SELECT MAX(user_i
             days_ago := floor(random() * 365)::int;
 
             -- Evitar duplicados exactos (mismo item comprado por el usuario)
-            -- (Opcional: si tu sistema permite recompras, puedes quitar el IF NOT EXISTS)
             IF NOT EXISTS (SELECT 1 FROM Compras WHERE user_id = new_user_id AND item_id = target_item) THEN
                 INSERT INTO Compras (user_id, item_id, timestamp)
                 VALUES (
